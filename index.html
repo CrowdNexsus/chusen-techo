@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>抽選手帳</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* 抽選券の半券: 左の切り取り線の外に「あと何時間」、右に中身。上は今日やることの数だけ */
+:root{
+  --paper:#F3F5F8; --card:#FFFFFF; --ink:#1B2230; --sub:#5B6475; --line:#D9DEE7;
+  --accent:#2F55C8; --accent-ink:#FFFFFF; --soft:#E7ECF8;
+  --urgent:#C8382A; --urgent-soft:#FBE6E3; --warn:#9A6400; --warn-soft:#FBF0D9;
+  --ok:#2E7A4F; --ok-soft:#E2F2E8;
+  --f-display:"Dela Gothic One","Zen Kaku Gothic New","Hiragino Sans",sans-serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#11141B; --card:#1A1F29; --ink:#E7EAF0; --sub:#9AA3B5; --line:#2C3340;
+  --accent:#7D98F0; --accent-ink:#0E1220; --soft:#222B3F;
+  --urgent:#F0796B; --urgent-soft:#3A1F1C; --warn:#E3B45C; --warn-soft:#3A2F17;
+  --ok:#6CC795; --ok-soft:#173025; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#11141B; --card:#1A1F29; --ink:#E7EAF0; --sub:#9AA3B5; --line:#2C3340;
+  --accent:#7D98F0; --accent-ink:#0E1220; --soft:#222B3F;
+  --urgent:#F0796B; --urgent-soft:#3A1F1C; --warn:#E3B45C; --warn-soft:#3A2F17;
+  --ok:#6CC795; --ok-soft:#173025; color-scheme:dark}
+
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);padding-block:12px 10px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)}
+h1{font-family:var(--f-display);font-weight:400;font-size:22px;margin:0;letter-spacing:.04em;flex:1}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 12px;min-height:40px}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+button.ghost{background:transparent}
+button.small{min-height:34px;padding:5px 10px;font-size:13.5px}
+button:disabled{opacity:.5;cursor:default}
+
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-block:14px}
+.sum{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;min-width:0}
+.sum b{display:block;font-family:var(--f-num);font-size:22px;font-variant-numeric:tabular-nums;line-height:1.2}
+.sum span{font-size:12px;color:var(--sub)}
+.sum.hot b{color:var(--urgent)}
+@media (max-width:420px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+nav.tabs,nav.cats{display:flex;gap:6px;margin-block:4px 14px;overflow-x:auto;padding-bottom:2px}
+nav.tabs button,nav.cats button{border-radius:999px;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+nav.cats{margin-block:-6px 10px}
+nav.cats button{min-height:34px;padding:4px 12px;font-size:13.5px}
+nav.cats button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+nav.cats button .c{font-family:var(--f-num);font-size:12px;opacity:.75;margin-left:4px}
+
+.group{margin-block:18px 6px;font-size:12.5px;letter-spacing:.08em;color:var(--sub);font-weight:700}
+.list{display:flex;flex-direction:column;gap:10px}
+
+.ticket{display:grid;grid-template-columns:92px minmax(0,1fr);background:var(--card);border:1px solid var(--line);border-radius:14px;position:relative}
+.stub{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:10px 6px;border-right:2px dashed var(--line);gap:2px}
+.stub .n{font-family:var(--f-num);font-weight:600;font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums}
+.stub .u{font-size:12px;color:var(--sub)}
+.ticket.urgent .stub .n{color:var(--urgent)}
+.ticket.urgent{border-color:var(--urgent)}
+.ticket::before,.ticket::after{content:"";position:absolute;left:83px;width:16px;height:16px;border-radius:50%;background:var(--paper);border:1px solid var(--line)}
+.ticket::before{top:-9px}.ticket::after{bottom:-9px}
+.ticket.urgent::before,.ticket.urgent::after{border-color:var(--urgent)}
+.ticket.applied{border-color:var(--ok)}
+.ticket.applied::before,.ticket.applied::after{border-color:var(--ok)}
+.ticket.applied .stub .n{color:var(--ok)}
+.body{padding:10px 12px;min-width:0;display:flex;flex-direction:column;gap:6px}
+.head{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
+.head .chips{flex:1 1 160px;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--soft);color:var(--ink);white-space:nowrap}
+.chip.kind{background:var(--ink);color:var(--paper)}
+.chip.recv{background:transparent;border:1px solid var(--line);color:var(--sub)}
+.chip.st-当選{background:var(--ok-soft);color:var(--ok)}
+.chip.st-落選,.chip.st-見送り{background:var(--line);color:var(--sub)}
+.chip.st-応募済み{background:var(--warn-soft);color:var(--warn)}
+.chip.unverified{background:var(--warn-soft);color:var(--warn)}
+.chip.verified{background:var(--ok-soft);color:var(--ok)}
+/* 応募したチェック */
+label.check{flex:none;flex-direction:row;align-items:center;gap:6px;font-size:13.5px;color:var(--ink);font-weight:700;white-space:nowrap;cursor:pointer;padding:4px 10px 4px 6px;border-radius:999px;border:1px solid var(--line);background:var(--paper)}
+label.check input{width:20px;height:20px;margin:0;accent-color:var(--ok);flex:none}
+label.check.on{border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+.name{font-weight:700;font-size:16px;overflow-wrap:anywhere}
+.shop{color:var(--sub);font-size:13.5px;overflow-wrap:anywhere}
+.when{font-size:14px}
+.when .t{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.when.urgent{color:var(--urgent);font-weight:700}
+.dates{font-size:12.5px;color:var(--sub);display:flex;flex-wrap:wrap;gap:2px 12px}
+.dates .t{font-family:var(--f-num)}
+.note{font-size:13px;color:var(--sub);overflow-wrap:anywhere;white-space:pre-wrap}
+.actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.actions a{display:inline-flex;align-items:center;min-height:34px;padding:5px 10px;border-radius:10px;border:1px solid var(--line);color:var(--accent);text-decoration:none;font-size:13.5px}
+.actions .sep{flex:1}
+
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:18px;color:var(--sub)}
+.empty b{color:var(--ink)}
+.banner{border-radius:12px;padding:10px 12px;font-size:13.5px;margin-block:10px}
+.banner.err{background:var(--urgent-soft);color:var(--urgent)}
+.banner.info{background:var(--soft)}
+
+/* 足す・直す */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-block:14px;display:flex;flex-direction:column;gap:12px}
+.panel h2{font-size:16px;margin:0}
+.reader{background:var(--soft);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.reader p{margin:0;font-size:13px;color:var(--sub)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--sub);min-width:0}
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0;width:100%;box-sizing:border-box}
+textarea{min-height:76px;resize:vertical}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:480px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.hint{font-size:12.5px;color:var(--sub);margin:0}
+.where{display:flex;flex-direction:column;gap:6px;margin-top:16px}
+.where a{color:var(--accent)}
+details.keep{margin-top:28px;border-top:1px solid var(--line);padding-top:12px}
+details.keep summary{cursor:pointer;color:var(--sub);font-size:13.5px}
+details.keep .box{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+details.more{margin-top:16px}
+details.more summary{cursor:pointer;color:var(--sub);font-size:13.5px}
+details.more ul{margin:8px 0 0;padding-left:20px;font-size:13.5px;line-height:1.7;overflow-wrap:anywhere}
+details.more a{color:var(--accent)}
+@media (prefers-reduced-motion:no-preference){.ticket{transition:border-color .2s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>抽選手帳</h1>
+    <button id="addBtn" class="primary" type="button">＋ 足す</button>
+  </header>
+
+  <div id="banner"></div>
+
+  <section class="summary" aria-label="まとめ">
+    <div class="sum hot"><b id="sToday">0</b><span>24時間以内</span></div>
+    <div class="sum"><b id="sWeek">0</b><span>7日以内</span></div>
+    <div class="sum"><b id="sWait">0</b><span>結果まち</span></div>
+    <div class="sum"><b id="sBuy">0</b><span>当選・未購入</span></div>
+  </section>
+
+  <form id="panel" class="panel" hidden>
+    <h2 id="panelTitle">抽選・予約を足す</h2>
+    <div class="reader" id="reader" hidden>
+      <p>告知の文を貼るか、スクリーンショットを選ぶと、日時を読み取って下に書き込みます。保存の前に必ず見直してください。</p>
+      <textarea id="pasteText" placeholder="例：ハドウシーカー 抽選受付 10/30 13:00〜11/1 19:00、当選発表 11/26"></textarea>
+      <div class="row">
+        <input id="pasteImg" type="file" accept="image/*" hidden>
+        <button type="button" id="imgBtn" class="small">スクショを選ぶ</button>
+        <span id="imgName" class="hint"></span>
+        <span style="flex:1"></span>
+        <button type="button" id="readBtn" class="small primary">読み取る</button>
+      </div>
+      <p id="readMsg" aria-live="polite"></p>
+    </div>
+    <div class="grid2">
+      <label>種類<select id="fKind"><option>抽選</option><option>予約</option><option>先着</option></select></label>
+      <label>いまの状態<select id="fStatus"><option>まだ</option><option>応募済み</option><option>当選</option><option>落選</option><option>購入済み</option><option>見送り</option></select></label>
+      <label>カテゴリー<select id="fCat"><option>トレカ</option><option>おもちゃ・ホビー</option><option>ゲーム</option><option>家電</option><option>アパレル</option><option>その他</option></select></label>
+      <label>受け取り<select id="fRecv"><option>通販</option><option>店舗受け取り</option></select></label>
+    </div>
+    <label>商品<input id="fName" placeholder="ポケカ ハドウシーカー BOX"></label>
+    <label>お店・サイト<input id="fShop" placeholder="ポケモンセンターオンライン"></label>
+    <label>応募ページ（URL）<input id="fUrl" type="url" inputmode="url" placeholder="https://"></label>
+    <div class="grid2">
+      <label>受付開始<input id="fOpen" type="datetime-local"></label>
+      <label>締切<input id="fClose" type="datetime-local"></label>
+      <label>結果発表<input id="fResult" type="datetime-local"></label>
+      <label>購入・支払いの期限<input id="fBuy" type="datetime-local"></label>
+    </div>
+    <label>メモ<textarea id="fNote" placeholder="本人確認が要る、支払いは現金のみ、など"></textarea></label>
+    <p id="formMsg" class="hint" aria-live="polite"></p>
+    <div class="row" id="formBtns">
+      <button type="submit" class="primary" id="saveBtn">保存</button>
+      <button type="button" class="ghost" id="cancelBtn">やめる</button>
+    </div>
+  </form>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="trend" aria-selected="true">話題の抽選</button>
+    <button type="button" role="tab" data-tab="mine" aria-selected="false">自分の一覧</button>
+    <button type="button" role="tab" data-tab="done" aria-selected="false">終わった物</button>
+  </nav>
+  <nav class="cats" id="cats" aria-label="カテゴリー"></nav>
+
+  <main id="view">
+    <div class="empty"><b>一覧を用意しています。</b><br>締切や結果発表が近い順に、抽選・予約が並びます。</div>
+  </main>
+
+  <details class="keep">
+    <summary>この端末の記録について（控えの写し・戻し）</summary>
+    <div class="box">
+      <p class="hint">「応募した」のチェックと自分で足した物は、この端末のこのブラウザにだけ残ります。ほかの人や、ほかの端末には見えません。ブラウザの履歴やサイトのデータを消すと消えるので、たまに控えを写しておくと安心です。</p>
+      <div class="row">
+        <button type="button" class="small" id="copyBtn">控えを写す</button>
+        <button type="button" class="small" id="restoreBtn">貼った控えで戻す</button>
+      </div>
+      <textarea id="keepBox" aria-label="控え" placeholder="ここに控えが出ます。戻すときは、写しておいた控えをここに貼ってから「貼った控えで戻す」を押します。"></textarea>
+      <p id="keepMsg" class="hint" aria-live="polite"></p>
+    </div>
+  </details>
+</div>
+
+<!-- 話題の抽選。Claude が調べて書き換える（checked は調べた日、verified は公式のページで日時を確かめたか） -->
+<script type="application/json" id="trend-data">
+{"updated":"2026-10-30 05:04","auto":true,"items":[{"id":"pco-hadou","kind":"抽選","category":"トレカ","receive":"通販","name":"ポケカ ハドウシーカー BOX","shop":"ポケモンセンターオンライン","open_at":"2026-10-23T16:00","close_at":"2026-10-26T16:59","result_at":"2026-10-30T15:00","buy_by":"2026-11-02T16:59","closed":true,"note":"応募は 10/26 16:59 で終了。応募した人は 10/30 15:00 以降に結果を見て、11/2 16:59 までに注文する。発送は 11/25〜11/28 に分散。","url":"https://www.support.pokemoncenter-online.com/%E3%83%9D%E3%82%B1%E3%83%A2%E3%83%B3%E3%82%AB%E3%83%BC%E3%83%89%E3%82%B2%E3%83%BC%E3%83%A0%20MEGA%20%E6%8B%A1%E5%BC%B5%E3%83%91%E3%83%83%E3%82%AF%E3%80%8C%E3%83%8F%E3%83%89%E3%82%A6%E3%82%B7%E3%83%BC%E3%82%AB%E3%83%BC%E3%80%8DBOX%E3%81%AE%E6%8A%BD%E9%81%B8%E8%B2%A9%E5%A3%B2-6ad759ab34282d555d428fd7","verified":true,"checked":"10/28","manual":true},{"id":"aeon-hadou","kind":"抽選","category":"トレカ","receive":"通販","name":"ポケカ ハドウシーカー","shop":"イオンスタイルオンライン","open_at":"2026-10-27T11:00","close_at":"2026-10-28T23:59","result_at":"2026-11-09T12:00","note":"会員の登録が要る。公式ページが自動の読み取りを断ったので、日時はまとめサイト（入荷Now）の情報。受け取り方も公式で確かめる。","url":"https://aeonretail.com/Page/k-lottery_pokemon_com.aspx","source":"https://nyuka-now.com/archives/2459","verified":false,"checked":"10/28","closed":true,"manual":true},{"id":"tcgmst-tenjin-storm","kind":"抽選","category":"トレカ","receive":"店舗受け取り","area":"福岡","name":"ポケカ ストームエメラルダ","shop":"トレカマスター天神サザン通り店","close_at":"2026-10-29T23:59","note":"X で応募する形（SNS応募）。","url":"https://x.com/TCG_Mst_Tenjin/status/2110292339063177711","source":"https://cardchusen.com/pokeka","verified":false,"checked":"10/28","manual":true},{"id":"tsutaya-aoi-30th","kind":"抽選","category":"トレカ","receive":"店舗受け取り","area":"山口","name":"ポケカ 30周年パック","shop":"TSUTAYA山口葵店","close_at":"2026-11-01T23:59","note":"会員が要る。応募のやり方は店の X の投稿に書いてある。","url":"https://x.com/TsutayaT6817/status/2114508808311710060","source":"https://cardchusen.com/pokeka","verified":false,"checked":"10/28","manual":true},{"id":"cb-hiroshima-deck","kind":"抽選","category":"トレカ","receive":"店舗受け取り","area":"広島","name":"ポケカ スペシャルデッキセットMEGA メガオーダイル・メガカイリュー・メガゲンガー","shop":"カードボックス広島店","close_at":"2026-11-02T23:59","note":"会員・本人確認が要る。","url":"https://shoplottery.e-starbox.com/lottery/entry?code=9pJ6rKzR7A","source":"https://cardchusen.com/pokeka","verified":false,"checked":"10/28","manual":true},{"id":"cb-hiroshima-hadou","kind":"抽選","category":"トレカ","receive":"店舗受け取り","area":"広島","name":"ポケカ ハドウシーカー","shop":"カードボックス広島店","open_at":"2026-10-24T00:00","close_at":"2026-11-02T23:59","result_at":"2026-11-03T12:00","note":"会員・本人確認が要る。当選発表は 11/3（時刻は不明）。","url":"https://shoplottery.e-starbox.com/lottery/entry?code=TpRryqt0k2","source":"https://cardchusen.com/pokeka/hadou-seeker","verified":false,"checked":"10/28","manual":true},{"id":"giga-hofu-deck","kind":"抽選","category":"トレカ","receive":"店舗受け取り","area":"山口","name":"ポケカ スペシャルデッキセットMEGA メガオーダイル・メガカイリュー・メガゲンガー","shop":"GIGA防府店（フタバ図書TSUTAYA）","close_at":"2026-11-06T23:59","note":"会員が要る。応募のやり方は店の X の投稿に書いてある。","url":"https://x.com/ftb_hofu_tcg/status/2113593720000110816","source":"https://cardchusen.com/pokeka","verified":false,"checked":"10/28","manual":true},{"id":"oretan-tenjin-deck","kind":"抽選","category":"トレカ","receive":"店舗受け取り","area":"福岡","name":"ポケカ スペシャルデッキセットMEGA メガオーダイル・メガカイリュー・メガゲンガー","shop":"オレタン福岡天神店","close_at":"2026-11-08T23:59","note":"会員が要る。","url":"https://oretan.membercard.jp/lottery?search_store_id=119","source":"https://cardchusen.com/pokeka","verified":false,"checked":"10/28","manual":true},{"id":"amazon-mk2","kind":"抽選","category":"おもちゃ・ホビー","receive":"通販","name":"METAL STRUCTURE 解体匠機 RX-178 ガンダムMk-II（エゥーゴ仕様）（招待リクエスト）","shop":"Amazon","note":"商品ページの「招待をリクエスト」から申し込む。締切は公表されていない。","url":"https://www.amazon.co.jp/dp/B0HCT86HFF","source":"https://nyuka-now.com/archives/17197","verified":false,"checked":"10/28","manual":true},{"id":"bic-hiroshima-hadou","kind":"抽選","category":"トレカ","receive":"店舗受け取り","area":"広島","name":"ポケカ ハドウシーカー","shop":"ビックカメラ広島駅前店","open_at":"2026-10-30T00:00","note":"会員・レシート・本人確認が要る。締切は店の投稿で確かめる（ほかのビックカメラは 11/1 まで、当選発表 11/26 という情報がある）。","url":"https://x.com/bic_hiroshima/status/2115247182726959383","source":"https://cardchusen.com/pokeka","verified":false,"checked":"10/28","manual":true},{"id":"bic-tenjin-hadou","kind":"抽選","category":"トレカ","receive":"店舗受け取り","area":"福岡","name":"ポケカ ハドウシーカー","shop":"ビックカメラ天神2号館","open_at":"2026-10-30T11:00","note":"会員・レシート・本人確認が要る。締切は店の投稿で確かめる（ほかのビックカメラは 11/1 まで、当選発表 11/26 という情報がある）。","url":"https://x.com/biccameratenjin/status/2114913891839046106","source":"https://cardchusen.com/pokeka","verified":false,"checked":"10/28","manual":true},{"id":"nn-33bb24e094","kind":"抽選","category":"トレカ","receive":"通販","name":"ポケカ ハドウシーカー","shop":"Amazon","open_at":"2026-10-26T14:00","note":"招待制販売。Amazon.co.jp招待制販売。招待リクエストは12か月間有効。招待メール到着後に購入可能。招待制で、締切は公表されていない","url":"https://www.amazon.co.jp/dp/B0H4PQ6LR5","source":"https://nyuka-now.com/archives/2459","verified":false,"checked":"10/30","auto":true,"products":["ポケモンカード ハドウシーカー"],"key":"Amazon|抽選|ポケモンカードハドウシーカー|2026-10-26","seen":"2026-10-30"},{"id":"nn-6c856d58f8","kind":"抽選","category":"トレカ","receive":"通販","name":"ポケカ 30th CELEBRATION BOX・プレミアムデッキセットほか","shop":"ポケモンセンターオンライン","note":"WEB抽選受付（当選者にはオンライン販売）。12月頃に追加抽選（4回目）を開始予定。日程などの詳細は決まり次第お知らせします","url":"https://www.pokemoncenter-online.com/news/?id=20260929","source":"https://nyuka-now.com/archives/2459","verified":false,"checked":"10/30","auto":true,"products":["ポケモンカード 30th CELEBRATION BOX","ポケモンカード 30th CELEBRATION プレミアムデッキセット エーフィ・ブラッキー"],"key":"ポケモンセンターオンライン|抽選|ポケモンカード30thCELEBRATIONBOX|","seen":"2026-10-30"},{"id":"nn-dd438c6ee6","kind":"抽選","category":"トレカ","receive":"通販","name":"ポケカ・ワンピースカード・ドラゴンボールカードほか","shop":"ノジマオンライン","open_at":"2026-06-10T13:00","note":"招待制販売。ノジマオンライン会員IDが必要。複数IDでのエントリー無効。招待制で、締切は公表されていない","url":"https://docs.google.com/forms/d/e/1FAIpQLSe2tm0oG-L8fBGGdkqdWNJD2NRkl7IHSWxGKKcFoU_u0-K1Ow/viewform","source":"https://nyuka-now.com/archives/2459","verified":false,"checked":"10/30","auto":true,"products":["ポケモンカード、ワンピースカード、ドラゴンボールフュージョンワールド新弾各種"],"key":"ノジマオンライン|抽選|ポケモンカード、ワンピースカード、ドラゴンボールフュージョンワールド新弾各種|2026-06-10","seen":"2026-10-30"},{"id":"nn-f10666c412","kind":"抽選","category":"トレカ","receive":"通販","name":"ポケモンカード 30th CELEBRATION BOX・ONE PIECEカード OP-17","shop":"ノジマオンライン","open_at":"2026-10-04T18:00","note":"招待制販売。ノジマオンライン会員IDが必要。購入案内は不定期でメールにて案内。招待制で、締切は公表されていない","url":"https://contents.online.nojima.co.jp/secret202609/","source":"https://nyuka-now.com/archives/2459","verified":false,"checked":"10/30","auto":true,"products":["ポケモンカード 30th CELEBRATION BOX","ONE PIECEカードゲーム ブースターパック 世界最強の戦士【OP-17】"],"key":"ノジマオンライン|抽選|ポケモンカード30thCELEBRATIONBOX|2026-10-04","seen":"2026-10-30"}],"skipped":[{"shop":"ビックカメラ（一部店舗）","name":"ポケカ ハドウシーカー","category":"トレカ","close_at":"2026-11-01T18:00","url":"https://nyuka-now.com/archives/2459"},{"shop":"お宝創庫グループ（お宝創庫・おじゃま館・メディオ！・プレイズ 一部店舗）","name":"ポケカ ストームエメラルダ・ポケカ 30th CELEBRATION BOX","category":"トレカ","close_at":"2026-11-01T23:45","url":"https://www.otakarasouko.com/information/106230535/"},{"shop":"トレカステーション各店","name":"ポケカ ストームエメラルダ・ポケカ 30th CELEBRATION カードセット各種","category":"トレカ","close_at":"2026-11-01T23:59","url":"https://nyuka-now.com/archives/2459"},{"shop":"平和堂","name":"ポケカ スペシャルデッキセットMEGA メガオーダイル・メガカイリュー・メガゲンガー・ポケカ 30th CELEBRA…","category":"トレカ","close_at":"2026-11-01T23:59","url":"https://www.heiwado.jp/service/hopapp"},{"shop":"TCGショップ193各店","name":"ポケカ 30th CELEBRATION カードセット各種","category":"トレカ","close_at":"2026-11-04T23:59","url":"https://docs.google.com/forms/d/e/1FAIpQLSckLz6kpt0cOvnKUuW2zK4j8QaRgH-8WE7uGup8a5Fra6OCBQ/viewform"}],"problems":[],"sources":[{"url":"https://nyuka-now.com/archives/162289","title":"【2026年10月30日更新】ベイブレード各種の抽選・予約情報まとめ","count":0},{"url":"https://nyuka-now.com/archives/156722","title":"【2026年10月30日更新】ボンボンドロップシール各種の抽選・予約情報まとめ","count":15},{"url":"https://nyuka-now.com/archives/157639","title":"【2026年10月30日更新】ポケモン30周年記念商品各種の抽選・予約情報まとめ","count":10},{"url":"https://nyuka-now.com/archives/153107","title":"【2026年10月30日更新】POP MART LABUBU ラブブ各種の抽選・予約情報まとめ","count":15},{"url":"https://nyuka-now.com/archives/152554","title":"【2026年10月30日更新】マジック・ザ・ギャザリング各種の抽選・予約情報まとめ","count":10},{"url":"https://nyuka-now.com/archives/148800","title":"【2026年10月30日更新】機動戦士ガンダム アーセナルベース各種の抽選・予約情報まとめ","count":2},{"url":"https://nyuka-now.com/archives/148908","title":"【2026年10月30日更新】GeForce RTX 5090 / 5080 / 5070ti / 5070各種の抽選・予約情報まとめ","count":15},{"url":"https://nyuka-now.com/archives/147287","title":"【2026年10月30日更新】Tamagotchi（たまごっち）各種の抽選・予約情報まとめ","count":1},{"url":"https://nyuka-now.com/archives/146927","title":"【2026年10月30日更新】ディズニー・ロルカナ・トレーディングカードゲーム各種の抽選・予約情報まとめ","count":12},{"url":"https://nyuka-now.com/archives/2459","title":"【2026年10月30日更新】ポケモンカード各種の抽選・予約情報まとめ","count":24}]}
+</script>
+
+<script>
+(function(){
+const $ = s => document.querySelector(s);
+const DONE = new Set(["落選","購入済み","見送り"]);
+const APPLIED = new Set(["応募済み","当選","落選","購入済み"]);
+let TD = {updated:"", items:[]};
+try { TD = JSON.parse($("#trend-data").textContent); } catch {}
+const TRENDS = (TD.items || []).filter(t => t && t.id);
+let sample = null, tab = "trend", editing = null;
+
+// カテゴリーごとのページ。#card などで直接開ける
+const CATS = [["all","すべて"],["card","トレカ"],["toy","おもちゃ・ホビー"],["game","ゲーム"],["kaden","家電"],["apparel","アパレル"],["other","その他"]];
+const CAT_NAME = Object.fromEntries(CATS);
+const catOf = x => CATS.some(([k,v]) => v === x.category && k !== "all") ? x.category : "その他";
+let cat = (CATS.find(([k]) => "#"+k === location.hash) || CATS[0])[0];
+window.addEventListener("hashchange", () => { const c = CATS.find(([k]) => "#"+k === location.hash); if (c){ cat = c[0]; render(); } });
+const inCat = x => cat === "all" || catOf(x) === CAT_NAME[cat];
+const WHERE = {
+  card:[["カード抽選まとめ（店ごとの一覧）","https://cardchusen.com/"],["入荷Now ポケカ","https://nyuka-now.com/archives/2459"],["ポケモンセンターオンライン お知らせ","https://www.pokemoncenter-online.com/news/"]],
+  toy:[["プレミアムバンダイ","https://p-bandai.jp/"],["入荷Now ガンプラ","https://nyuka-now.com/archives/17197"],["魂ウェブ","https://tamashiiweb.com/"]],
+  game:[["マイニンテンドーストア","https://store-jp.nintendo.com/"],["ヨドバシ・ドット・コム","https://www.yodobashi.com/"]],
+  kaden:[["ヨドバシ・ドット・コム","https://www.yodobashi.com/"],["ビックカメラ.com","https://www.biccamera.com/"]],
+  apparel:[["atmos ウェブ抽選","https://www.atmos-tokyo.com/raffles"],["Nike SNKRS 発売予定","https://www.nike.com/jp/launch?s=upcoming"],["スニーカーダンク 発売カレンダー","https://snkrdunk.com/calendars/"]],
+  other:[]
+};
+
+// ---- この端末の記録（チェックと自分で足した物） ----
+const KEY = "chusen-techo-v1";
+let mem = {own:[], marks:{}};
+const isObj = x => x && typeof x === "object" && !Array.isArray(x);
+function clean(o){
+  const marks = {};
+  if (isObj(o) && isObj(o.marks)) for (const [id, m] of Object.entries(o.marks))
+    if (isObj(m) && typeof m.status === "string") marks[id] = {...m, snap: isObj(m.snap) ? m.snap : undefined, over: isObj(m.over) ? m.over : undefined};
+  return {own: isObj(o) && Array.isArray(o.own) ? o.own.filter(x => isObj(x) && x.id) : [], marks};
+}
+function load(){ try { const s = localStorage.getItem(KEY); if (s) mem = clean(JSON.parse(s)); } catch {} }
+function persist(){
+  try { localStorage.setItem(KEY, JSON.stringify(mem)); }
+  catch { banner("この端末では記録を残せません（プライベートブラウズなど）。ページを閉じると消えます。", "err"); }
+}
+window.addEventListener("storage", e => { if (e.key === KEY){ load(); render(); } });
+
+function h(tag, attrs, ...kids){
+  const el = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs||{})){
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "checked") el.checked = !!v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) el.append(k instanceof Node ? k : String(k));
+  return el;
+}
+// replaceChildren は配列を平らにしないので、必ずこれを通す
+const put = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter(k => k != null && k !== false));
+const pad = n => String(n).padStart(2,"0");
+function parse(s){ if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
+// 締切・期限の「23:59」は 23:59:59 まで受け付ける扱い
+function parseEnd(s){ const d = parse(s); return d ? new Date(+d + 59999) : null; }
+function fmt(d){ return `${d.getMonth()+1}/${d.getDate()}(${"日月火水木金土"[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function safeUrl(u){ try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } }
+function left(at, now){
+  const ms = at - now;
+  if (ms < 0) return {past:true, n:"過ぎ", u:fmt(at).split(" ")[0]};
+  const m = Math.ceil(ms/60000);
+  if (m < 60) return {n:String(m), u:"分"};
+  if (m < 48*60) return {n:String(Math.floor(m/60)), u:"時間"};
+  return {n:String(Math.floor(m/1440)), u:"日"};
+}
+const stubLeft = (lt, before) => lt.past ? [h("div",{class:"n"},lt.n), h("div",{class:"u"},lt.u)] : [h("div",{class:"u"},before), h("div",{class:"n"},lt.n), h("div",{class:"u"},lt.u)];
+function banner(text, cls){ put($("#banner"), text ? h("div",{class:"banner "+(cls||"info")}, text) : null); }
+
+// 話題の物と自分で足した物を、同じ形の「1件」にそろえる。
+// 話題の物は印を付けた時点の中身を snap に写しておく（ページの一覧から外れても見張りを続けるため）。
+// over はマスターが自分で直した欄（購入期限など）。
+const TREND_FIELDS = ["kind","category","receive","area","name","shop","open_at","close_at","result_at","buy_by","closed","note","url","source","verified","checked"];
+const snapOf = t => Object.fromEntries(TREND_FIELDS.filter(k => t[k] != null).map(k => [k, t[k]]));
+const TREND_BY_ID = Object.fromEntries(TRENDS.map(t => [t.id, t]));
+function trendEntry(t){
+  const m = mem.marks[t.id];
+  const base = TREND_BY_ID[t.id] || (m && m.snap) || {name:`一覧から外れた抽選（${t.id}）`, note:"この物はページの一覧から外れ、中身の写しも残っていません。要らなければ「一覧から外す」で消せます。"};
+  return {...base, ...((m && m.over) || {}), id:t.id, src:"trend", key:"t-"+t.id, status: m ? m.status : "まだ", marked: !!m, updated_at: m ? m.at : ""};
+}
+const ownEntry = o => ({...o, src:"own", key:"o-"+o.id});
+const myEntries = () => [...mem.own.map(ownEntry), ...Object.keys(mem.marks).filter(id => mem.marks[id]).map(id => trendEntry({id}))];
+// 前の版で付けた印には写しが無いので、一覧にまだあるうちに補う
+function backfillSnaps(){
+  let changed = false;
+  for (const [id, m] of Object.entries(mem.marks)) if (m && !m.snap && TREND_BY_ID[id]){ m.snap = snapOf(TREND_BY_ID[id]); changed = true; }
+  if (changed) persist();
+}
+function mark(id, status){
+  const t = TREND_BY_ID[id], old = mem.marks[id] || {};
+  mem.marks[id] = {...old, status, at:new Date().toISOString(), snap: t ? snapOf(t) : old.snap};
+}
+
+function setStatus(e, s){
+  if (e.src === "trend") mark(e.id, s);
+  else { const o = mem.own.find(x => x.id === e.id); if (!o) return; o.status = s; o.updated_at = new Date().toISOString(); }
+  persist(); render();
+}
+function unmark(id){ delete mem.marks[id]; persist(); render(); }
+
+// いまの状態から「次に気にする日時」を決める
+function nextEvent(it, now){
+  const st = it.status || "まだ", kind = it.kind || "抽選";
+  if (DONE.has(st)) return {done:true};
+  const open = parse(it.open_at), close = parseEnd(it.close_at), result = parse(it.result_at), buy = parseEnd(it.buy_by);
+  if (st === "まだ"){
+    if (open && open > now) return {label:"受付開始", at:open};
+    if (close){
+      if (close < now) return {done:true, expired:true};
+      return {label: kind === "予約" ? "予約締切" : kind === "先着" ? "販売終了" : "応募締切", at:close};
+    }
+    return {label:"締切は未定"};
+  }
+  if (st === "応募済み"){
+    if (kind !== "抽選") return buy ? {label:"受け取り・支払い", at:buy} : {label:"発売を待つ"};
+    if (result) return result < now ? {label:"結果を確かめる", at:result, overdue:true} : {label:"結果発表", at:result};
+    return {label:"結果まち（日付未定）"};
+  }
+  if (st === "当選"){
+    if (buy) return buy < now ? {label:"購入期限を過ぎました", at:buy, overdue:true} : {label:"購入・支払いの期限", at:buy};
+    return {label:"購入期限を書き足す"};
+  }
+  return {label:""};
+}
+
+function gcalLink(it, ev){
+  if (!ev.at || ev.overdue) return null;
+  const start = ev.label === "受付開始";
+  const at = new Date(Math.floor(ev.at / 60000) * 60000);
+  const s = start ? at : new Date(at - 3600000);
+  const e = start ? new Date(+at + 3600000) : at;
+  const f = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  const p = new URLSearchParams({
+    action:"TEMPLATE", text:`【${ev.label} ${pad(ev.at.getHours())}:${pad(ev.at.getMinutes())}】${it.name||""}`,
+    dates:`${f(s)}/${f(e)}`, ctz:"Asia/Tokyo",
+    details:[it.shop, safeUrl(it.url), it.note].filter(Boolean).join("\n")
+  });
+  return "https://calendar.google.com/calendar/render?" + p.toString();
+}
+
+// 「応募した」のチェック。外すと「まだ」に戻る
+function checkBox(e, where){
+  const on = APPLIED.has(e.status);
+  // 当選・落選・購入済みまで進んだ物はチェックで消さない（押し間違いで記録が消えないように）
+  if (on && e.status !== "応募済み") return h("span",{class:"chip st-"+e.status}, e.status);
+  const box = h("input",{type:"checkbox", id:`chk-${where}-${e.key}`, checked:on, onchange:(ev) => {
+    if (ev.target.checked) setStatus(e, "応募済み");
+    else if (e.src === "trend" && where === "trend" && !(mem.marks[e.id] && mem.marks[e.id].over)) unmark(e.id);
+    else setStatus(e, "まだ");
+  }});
+  return h("label",{class:"check"+(on?" on":""), for:`chk-${where}-${e.key}`}, box, e.kind === "抽選" || !e.kind ? "応募した" : e.kind === "予約" ? "予約した" : "買えた");
+}
+
+function dateLine(it){
+  const ds = [["受付",it.open_at],["締切",it.close_at],["発表",it.result_at],["期限",it.buy_by]]
+    .map(([k,v]) => { const d = parse(v); return d ? h("span",null,k+" ",h("span",{class:"t"},fmt(d))) : null; }).filter(Boolean);
+  return ds.length ? h("div",{class:"dates"}, ds) : null;
+}
+const recvChip = it => h("span",{class:"chip recv"}, it.receive === "店舗受け取り" ? "店舗受け取り" + (it.area ? "・" + it.area : "") : "通販");
+
+// 自分の一覧のカード
+function card(it, now){
+  const ev = nextEvent(it, now);
+  const urgent = ev.at && (ev.overdue || ev.at - now < 24*3600000);
+  const lt = ev.at ? left(ev.at, now) : null;
+  const st = it.status || "まだ";
+  const stLabel = (st === "応募済み" && it.kind && it.kind !== "抽選") ? "予約済み" : st;
+  const url = safeUrl(it.url), cal = gcalLink(it, ev);
+  const acts = [];
+  if (url) acts.push(h("a",{href:url, target:"_blank", rel:"noopener"}, it.src === "trend" && /x\.com\//.test(url) ? "店の告知" : "応募ページ"));
+  if (cal && !ev.done) acts.push(h("a",{href:cal, target:"_blank", rel:"noopener"},"カレンダーに入れる"));
+  acts.push(h("span",{class:"sep"}));
+  if (st === "まだ") acts.push(h("button",{type:"button",class:"small",onclick:()=>setStatus(it,"見送り")},"見送る"));
+  else if (st === "応募済み"){
+    if (!it.kind || it.kind === "抽選"){
+      acts.push(h("button",{type:"button",class:"small primary",onclick:()=>setStatus(it,"当選")},"当選"));
+      acts.push(h("button",{type:"button",class:"small",onclick:()=>setStatus(it,"落選")},"落選"));
+    } else acts.push(h("button",{type:"button",class:"small primary",onclick:()=>setStatus(it,"購入済み")},"受け取った"));
+  } else if (st === "当選") acts.push(h("button",{type:"button",class:"small primary",onclick:()=>setStatus(it,"購入済み")},"買った"));
+  else acts.push(h("button",{type:"button",class:"small",onclick:()=>setStatus(it,"まだ")},"元に戻す"));
+  acts.push(h("button",{type:"button",class:"small ghost",onclick:()=>openPanel(it)}, it.src === "own" ? "直す" : "日付を直す"));
+  if (it.src === "trend") acts.push(h("button",{type:"button",class:"small ghost",onclick:(ev)=>{
+    const b = ev.currentTarget;
+    if (b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "もう一度押すと外します"; return; }
+    unmark(it.id);
+  }},"一覧から外す"));
+
+  return h("article",{class:"ticket"+(urgent && !ev.done ? " urgent":"")},
+    h("div",{class:"stub"},
+      ev.done ? [h("div",{class:"n"}, ev.expired ? "締切" : "済"), h("div",{class:"u"}, ev.expired ? "すぎ" : stLabel)]
+      : lt ? stubLeft(lt, "あと")
+      : [h("div",{class:"n"},"―"), h("div",{class:"u"},"日付未定")]),
+    h("div",{class:"body"},
+      h("div",{class:"head"},
+        h("div",{class:"chips"}, h("span",{class:"chip kind"}, it.kind||"抽選"), h("span",{class:"chip st-"+st}, stLabel), h("span",{class:"chip recv"}, catOf(it)), it.receive ? recvChip(it) : null),
+        (st === "まだ" || st === "応募済み") ? checkBox(it, "mine") : null),
+      h("div",{class:"name"}, it.name || "（名前なし）"),
+      it.shop ? h("div",{class:"shop"}, it.shop) : null,
+      !ev.done && ev.label ? h("div",{class:"when"+(urgent?" urgent":"")}, ev.label, ev.at ? [" ", h("span",{class:"t"},fmt(ev.at))] : null) : null,
+      dateLine(it),
+      it.note ? h("div",{class:"note"}, it.note) : null,
+      h("div",{class:"actions"}, acts)));
+}
+
+// 話題の抽選のカード
+function trendCard(t, now){
+  const e = trendEntry(t);
+  const applied = APPLIED.has(e.status);
+  const close = parseEnd(t.close_at), open = parse(t.open_at);
+  const ended = t.closed || (close && close <= now);
+  const ref = close && close > now ? close : (open && open > now ? open : null);
+  const lt = ref ? left(ref, now) : null;
+  const url = safeUrl(t.url), src = safeUrl(t.source);
+  const urgent = !applied && close && close > now && close - now < 24*3600000;
+  return h("article",{class:"ticket"+(applied ? " applied" : urgent ? " urgent" : "")},
+    h("div",{class:"stub"},
+      applied ? [h("div",{class:"n"},"✓"), h("div",{class:"u"}, e.status)]
+      : lt ? stubLeft(lt, ref === open ? "開始まで" : "締切まで")
+      : [h("div",{class:"n"},"―"), h("div",{class:"u"}, ended ? "受付終了" : "日付未定")]),
+    h("div",{class:"body"},
+      h("div",{class:"head"},
+        h("div",{class:"chips"}, h("span",{class:"chip kind"}, t.kind||"抽選"), recvChip(t),
+          t.verified ? h("span",{class:"chip verified"}, "公式で確認 "+(t.checked||"")) : h("span",{class:"chip unverified"}, "まとめ情報・公式は未確認")),
+        checkBox(e, "trend")),
+      h("div",{class:"name"}, t.name||""),
+      t.shop ? h("div",{class:"shop"}, t.shop) : null,
+      dateLine(t),
+      t.note ? h("div",{class:"note"}, t.note) : null,
+      h("div",{class:"actions"},
+        url ? h("a",{href:url,target:"_blank",rel:"noopener"}, /x\.com\//.test(url) ? "店の告知（X）" : "応募ページ") : null,
+        src && src !== url ? h("a",{href:src,target:"_blank",rel:"noopener"},"出典") : null,
+        h("span",{class:"sep"}),
+        e.marked ? h("span",{class:"chip"},"自分の一覧に入っています")
+          : ended ? h("span",{class:"hint"},"受付は終わりました。応募した人はチェックを付けると結果まで見張れます。")
+          : h("button",{type:"button",class:"small",onclick:()=>{ mark(t.id, "まだ"); persist(); banner("「自分の一覧」に入れました。締切が近い順に並びます。"); render(); }},"一覧に入れて見張る"))));
+}
+
+function render(){
+  const now = new Date();
+  const rows = myEntries().map(it => ({it, ev:nextEvent(it, now)}));
+  const active = rows.filter(r => !r.ev.done);
+  $("#sToday").textContent = active.filter(r => r.ev.at && (r.ev.overdue || r.ev.at - now < 24*3600000)).length;
+  $("#sWeek").textContent = active.filter(r => r.ev.at && r.ev.at - now < 7*24*3600000).length;
+  $("#sWait").textContent = rows.filter(r => r.it.status === "応募済み" && (r.it.kind||"抽選") === "抽選").length;
+  $("#sBuy").textContent = rows.filter(r => r.it.status === "当選").length;
+
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+  // 締切・期限・発表のどれかがまだ先なら載せる。どれも無い物（招待制など）は、受付が終わっていなければ載せる
+  const live = t => { const ds = [parseEnd(t.close_at), parseEnd(t.buy_by), parse(t.result_at)];
+    return ds.some(d => d && d > now) || (ds.every(d => !d) && !t.closed); };
+  const pool = tab === "trend" ? TRENDS.filter(live) : tab === "done" ? rows.filter(r => r.ev.done).map(r => r.it) : active.map(r => r.it);
+  put($("#cats"), CATS.map(([k,v]) => {
+    const n = k === "all" ? pool.length : pool.filter(x => catOf(x) === v).length;
+    return h("button",{type:"button","aria-selected":String(cat===k), onclick:() => { cat = k; try { history.replaceState(null,"","#"+k); } catch {} render(); }}, v, h("span",{class:"c"}, n));
+  }));
+  const view = $("#view");
+
+  if (tab === "mine"){
+    if (!active.length){ put(view, h("div",{class:"empty"}, h("b",null,"気にする抽選・予約はいまありません。"), h("br"), "「話題の抽選」でチェックを付けるか「一覧に入れて見張る」を押すと、ここに締切の近い順で並びます。自分で見つけた物は「＋ 足す」で入れられます。")); return; }
+    const shown = active.filter(r => inCat(r.it));
+    if (!shown.length){ put(view, h("div",{class:"empty"}, `「${CAT_NAME[cat]}」で気にする物はいまありません。ほかのカテゴリーか「すべて」を見てください。`)); return; }
+    const eot = new Date(now); eot.setDate(eot.getDate()+1); eot.setHours(23,59,59,999);
+    const groups = [["今日・明日",[]],["7日以内",[]],["それより先",[]],["日付が決まっていない",[]]];
+    for (const r of shown){
+      if (!r.ev.at) groups[3][1].push(r);
+      else if (r.ev.overdue || r.ev.at <= eot) groups[0][1].push(r);
+      else if (r.ev.at - now <= 7*24*3600000) groups[1][1].push(r);
+      else groups[2][1].push(r);
+    }
+    put(view, groups.filter(g => g[1].length).map(([name, rs]) => [
+      h("div",{class:"group"}, name),
+      h("div",{class:"list"}, rs.sort((a,b)=>(a.ev.at||Infinity)-(b.ev.at||Infinity)).map(r=>card(r.it, now)))]));
+  } else if (tab === "done"){
+    const done = rows.filter(r => r.ev.done && inCat(r.it)).sort((a,b)=> String(b.it.updated_at||"").localeCompare(String(a.it.updated_at||"")));
+    put(view, done.length ? h("div",{class:"list"}, done.map(r=>card(r.it, now)))
+      : h("div",{class:"empty"}, h("b",null,"まだありません。"), h("br"), "落選・購入済み・見送り・締切を過ぎた物がここに入ります。"));
+  } else {
+    const soon = t => [parse(t.open_at),parseEnd(t.close_at),parse(t.result_at),parseEnd(t.buy_by)].filter(d => d && d > now).sort((x,y)=>x-y)[0] || Infinity;
+    const list = TRENDS.filter(t => live(t) && inCat(t)).sort((a,b)=> soon(a) - soon(b));
+    const online = list.filter(t => t.receive !== "店舗受け取り"), store = list.filter(t => t.receive === "店舗受け取り");
+    const skipped = (Array.isArray(TD.skipped) ? TD.skipped : []).filter(s => isObj(s) && s.shop && inCat(s) && !(parseEnd(s.close_at) && parseEnd(s.close_at) <= now));
+    const problems = Array.isArray(TD.problems) ? TD.problems.filter(p => typeof p === "string") : [];
+    const keys = cat === "all" ? CATS.slice(1).map(([k]) => k) : [cat];
+    const links = [...new Map(keys.flatMap(k => WHERE[k] || []).map(l => [l[1], l])).values()];
+    put(view,
+      h("p",{class:"hint"}, "いま話題の抽選・予約です", TD.updated ? `（${TD.updated} 時点）` : "", "。通販は全国、店舗受け取りは福岡・山口・広島の店だけを載せています。応募したらチェックを付けると、結果発表の日まで「自分の一覧」で見張れます。応募の前に、公式のページで日時と条件を確かめてください。"),
+      !list.length ? h("div",{class:"empty"}, `「${CAT_NAME[cat]}」でいま載せている物はありません。下の探す場所も見てください。`) : null,
+      online.length ? [h("div",{class:"group"},"通販で届く物"), h("div",{class:"list"}, online.map(t=>trendCard(t, now)))] : null,
+      store.length ? [h("div",{class:"group"},"店舗受け取り（福岡・山口・広島）"), h("div",{class:"list"}, store.map(t=>trendCard(t, now)))] : null,
+      skipped.length ? h("details",{class:"more"},
+        h("summary",null,`地域が分からず載せなかった店頭の抽選（${skipped.length}件）`),
+        h("p",{class:"hint"},"全国チェーンの「各店」「一部店舗」などで、福岡・山口・広島の店が対象か分からなかった物です。気になる物は店の告知で確かめてください。"),
+        h("ul",null, skipped.map(s => { const u = safeUrl(s.url), c = parseEnd(s.close_at);
+          return h("li",null, u ? h("a",{href:u,target:"_blank",rel:"noopener"}, s.shop) : s.shop, "：", s.name || "", c ? `（締切 ${fmt(c)}）` : ""); }))) : null,
+      problems.length ? h("details",{class:"more"},
+        h("summary",null,`前回の自動更新で気になったこと（${problems.length}件）`),
+        h("ul",null, problems.map(p => h("li",null, p)))) : null,
+      links.length ? h("div",{class:"where"}, h("div",{class:"group"},"ほかを探す場所"),
+        links.map(([name, u]) => h("a",{href:u,target:"_blank",rel:"noopener"}, name))) : null);
+  }
+}
+
+// ---- 足す・直す（自分で足した物だけ） ----
+const F = {kind:"#fKind", status:"#fStatus", category:"#fCat", receive:"#fRecv", name:"#fName", shop:"#fShop", url:"#fUrl", open_at:"#fOpen", close_at:"#fClose", result_at:"#fResult", buy_by:"#fBuy", note:"#fNote"};
+function fill(o){ for (const [k,s] of Object.entries(F)) if (o[k] != null && o[k] !== "") $(s).value = o[k]; }
+const TREND_EDITABLE = ["status","open_at","close_at","result_at","buy_by","note"];
+function openPanel(it){
+  editing = it ? {id:it.id, src:it.src} : null;
+  $("#panelTitle").textContent = !it ? "抽選・予約を足す" : it.src === "trend" ? "日付とメモを直す（自分の記録だけ）" : "直す";
+  // 話題の物は日付・状態・メモだけ直せる
+  for (const [k,s] of Object.entries(F)) $(s).disabled = !!(it && it.src === "trend" && !TREND_EDITABLE.includes(k));
+  for (const s of Object.values(F)) $(s).value = "";
+  $("#fKind").value = "抽選"; $("#fStatus").value = "まだ"; $("#fRecv").value = "通販";
+  $("#fCat").value = cat !== "all" ? CAT_NAME[cat] : "トレカ";
+  if (it) fill(it);
+  $("#reader").hidden = !!it || !sample;
+  $("#readMsg").textContent = ""; $("#formMsg").textContent = "";
+  const old = $("#delBtn"); if (old) old.remove();
+  if (it && it.src === "own"){
+    const b = h("button",{type:"button",class:"ghost",id:"delBtn"},"消す");
+    b.addEventListener("click", () => {
+      if (b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "もう一度押すと消します"; return; }
+      mem.own = mem.own.filter(x => x.id !== it.id); persist(); closePanel(); render();
+    });
+    $("#formBtns").append(b);
+  }
+  $("#panel").hidden = false;
+  $("#panel").scrollIntoView({behavior:"smooth", block:"start"});
+}
+function closePanel(){ $("#panel").hidden = true; editing = null; }
+$("#addBtn").addEventListener("click", () => openPanel(null));
+$("#cancelBtn").addEventListener("click", closePanel);
+$("#panel").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const data = {};
+  for (const [k,s] of Object.entries(F)) data[k] = $(s).value.trim();
+  if (editing && editing.src === "trend"){
+    const m = mem.marks[editing.id];
+    if (m){
+      // 実際に変えた欄だけを覚える（ほかの欄は、一覧の更新がそのまま見えるように）
+      const base = TREND_BY_ID[editing.id] || m.snap || {};
+      const over = {...(m.over || {})};
+      for (const k of TREND_EDITABLE.filter(k => k !== "status")){
+        if (data[k] !== String(base[k] ?? "")) over[k] = data[k]; else delete over[k];
+      }
+      m.over = Object.keys(over).length ? over : undefined;
+      m.status = data.status || m.status; m.at = new Date().toISOString();
+      persist();
+    }
+    closePanel(); tab = "mine"; render(); return;
+  }
+  if (!data.name){ $("#formMsg").textContent = "商品の名前を入れてください。"; return; }
+  if (data.url && !safeUrl(data.url)){ $("#formMsg").textContent = "URL は https:// から始まる形で入れてください。"; return; }
+  data.updated_at = new Date().toISOString();
+  if (editing){ const o = mem.own.find(x => x.id === editing.id); if (o) Object.assign(o, data); }
+  else mem.own.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), created_at: data.updated_at, ...data});
+  persist(); closePanel(); tab = "mine";
+  if (cat !== "all" && catOf(data) !== CAT_NAME[cat]){ cat = "all"; try { history.replaceState(null,"","#all"); } catch {} }
+  render();
+});
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
+
+// ---- 告知の文・スクショを読み取る（Claude にサインインしている人だけ） ----
+$("#imgBtn").addEventListener("click", () => $("#pasteImg").click());
+$("#pasteImg").addEventListener("change", () => { const f = $("#pasteImg").files[0]; $("#imgName").textContent = f ? f.name : ""; });
+$("#readBtn").addEventListener("click", async () => {
+  const text = $("#pasteText").value.trim(), img = $("#pasteImg").files[0];
+  const msg = $("#readMsg");
+  if (!text && !img){ msg.textContent = "文を貼るか、スクショを選んでください。"; return; }
+  const btn = $("#readBtn"); btn.disabled = true; msg.textContent = "読み取っています…（20秒ほどかかることがあります）";
+  const now = new Date();
+  const prompt = [
+    `今日は ${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}（日本時間）です。`,
+    "次の告知" + (img ? "（添付のスクリーンショット）" : "") + "から、抽選販売・予約・先着販売の情報を1件取り出してください。",
+    "答えは次の形の JSON だけにしてください。分からない欄は null。日時は \"YYYY-MM-DDTHH:MM\"（日本時間）。",
+    '{"kind":"抽選|予約|先着","category":"トレカ|おもちゃ・ホビー|ゲーム|家電|アパレル|その他","receive":"通販|店舗受け取り","name":"商品名","shop":"店・サイト名","url":"応募ページのURL","open_at":"受付開始","close_at":"受付締切","result_at":"当選発表","buy_by":"購入・支払いの期限","note":"応募条件など大事な注意を短く"}',
+    "年が書いていない日付は、今日より後で最も近い年にしてください。時刻が書いていない締切は 23:59、発表は 12:00 とし、そうしたことを note に書いてください。書いていないことを作らないでください。",
+    text ? "\n告知の文:\n" + text.slice(0, 6000) : ""
+  ].join("\n");
+  try {
+    const r = await sample.json(prompt, img ? {images:[img]} : {});
+    if (!r || typeof r !== "object") throw {code:"invalid_json"};
+    const o = {};
+    for (const k of Object.keys(F)) if (k !== "status" && typeof r[k] === "string") o[k] = r[k].slice(0, k === "note" ? 500 : 200);
+    if (!["抽選","予約","先着"].includes(o.kind)) delete o.kind;
+    if (!CATS.slice(1).some(([,v]) => v === o.category)) delete o.category;
+    if (!["通販","店舗受け取り"].includes(o.receive)) delete o.receive;
+    for (const k of ["open_at","close_at","result_at","buy_by"]) if (o[k] && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(o[k])) delete o[k];
+    fill(o);
+    msg.textContent = "下に書き込みました。日時が告知と合っているか見てから「保存」を押してください。";
+  } catch(e){
+    const c = e && e.code;
+    msg.textContent = c === "not_granted" || c === "sampling_disabled" ? "読み取りは使えない設定になっています。下の欄に手で入れてください。"
+      : c === "rate_limited" ? "少し時間をおいてからもう一度押してください。"
+      : c === "image_rejected" ? "この画像は読めませんでした。別のスクショを選んでください。"
+      : "うまく読み取れませんでした。文を短くするか、手で入れてください。";
+  } finally { btn.disabled = false; }
+});
+
+// ---- 控えの写し・戻し ----
+$("#copyBtn").addEventListener("click", async () => {
+  const s = JSON.stringify(mem);
+  $("#keepBox").value = s;
+  try { await navigator.clipboard.writeText(s); $("#keepMsg").textContent = "控えをコピーしました。メモ帳などに貼って残してください。"; }
+  catch { $("#keepBox").select(); $("#keepMsg").textContent = "下の欄の文字を全部選んでコピーしてください。"; }
+});
+$("#restoreBtn").addEventListener("click", () => {
+  const b = $("#restoreBtn");
+  const text = $("#keepBox").value;
+  let raw = null; try { raw = JSON.parse(text); } catch {}
+  const o = raw && typeof raw === "object" && !Array.isArray(raw) && (Array.isArray(raw.own) || (raw.marks && typeof raw.marks === "object")) ? clean(raw) : null;
+  if (!o || (!o.own.length && !Object.keys(o.marks).length)){ disarmRestore(); $("#keepMsg").textContent = "控えの形が違うか、中身が空です。写したときの文字をそのまま貼ってください。今の記録は変えていません。"; return; }
+  if (b.dataset.armed !== text){ b.dataset.armed = text; b.textContent = `もう一度押すと、今の記録を控えの内容（自分で足した物 ${o.own.length}件・チェック ${Object.keys(o.marks).length}件）に置き換えます`; return; }
+  disarmRestore();
+  mem = o; persist(); render(); $("#keepMsg").textContent = "控えから戻しました。";
+});
+function disarmRestore(){ const b = $("#restoreBtn"); delete b.dataset.armed; b.textContent = "貼った控えで戻す"; }
+$("#keepBox").addEventListener("input", disarmRestore);
+document.querySelector("details.keep").addEventListener("toggle", disarmRestore);
+
+load();
+backfillSnaps();
+render();
+// 自動で更新している一覧（公開ページ）が古いままなら知らせる
+if (TD.auto && typeof TD.updated === "string"){
+  const u = new Date(TD.updated.replace(" ", "T") + ":00+09:00");
+  if (!isNaN(u) && Date.now() - u > 36*3600000) banner(`一覧の自動更新が止まっているようです（最後の更新 ${fmt(u)}）。パソコンの電源が入っているか確かめてください。`, "err");
+}
+setInterval(render, 60000);
+(async () => { if (window.claude && claude.use){ sample = await claude.use("sample"); } })();
+})();
+</script>
+</body>
+</html>
